@@ -1,0 +1,235 @@
+FUNCTION_BLOCK workoutLocalIntensity
+
+VAR_INPUT				// Define input variables
+	hr    : REAL;
+	speed : REAL;
+	slope : REAL;
+END_VAR
+
+VAR_OUTPUT				// Define output variable
+	intensity : REAL;
+	bodyStrain: REAL;
+END_VAR
+
+FUZZIFY hr
+    TERM resting         := sigm -50 0.45;
+    TERM veryLight       := gbell 0.075 15 0.525;
+    TERM light           := gbell 0.045 15 0.65;
+    TERM moderate        := gbell 0.045 15 0.75;
+    TERM subMaximal      := gbell 0.045 15 0.85;
+    TERM maximal         := sigm 100 0.9;
+END_FUZZIFY
+
+FUZZIFY speed
+	TERM activeRecovery  := sigm -3 5 ;
+	TERM easy            := gbell 1.5 3 8.75;
+	TERM tempo           := gbell 1.5 3 11.3;
+	TERM threshold       := gauss 13.50 0.15;
+	TERM hard            := gbell 2 3 15.5;
+	TERM anaerobic       := sigm 1 17.5;
+END_FUZZIFY
+
+FUZZIFY slope
+    TERM bigDrop         := sigm -0.75 -15;
+    TERM drop            := gbell 4 6 -10;
+	TERM flat            := gauss 0 2;
+	TERM increase        := gbell  4 6 10;
+	TERM bigIncrease     := gbell  4 6 20;
+	TERM veryBigIncrease := sigm 1 25.5;
+END_FUZZIFY
+
+DEFUZZIFY intensity
+	TERM recovery   := trian  0 0 0.75;
+	TERM low        := trian  0.25 1 1.75;
+	TERM moderate   := trian  1.25 2 2.75;
+	TERM high       := trian  2.25 3 3.75;
+	TERM veryHigh   := trian  3.25 4 4.75;
+	TERM maximal    := trian  4.25 5 5;
+	METHOD : COG;
+	DEFAULT := 2;
+END_DEFUZZIFY
+
+DEFUZZIFY bodyStrain
+    TERM veryLow    := trian  0 0 1;
+    TERM low        := trian  0 1 2;
+    TERM moderate   := trian  1 2 3;
+    TERM high       := trian  2 3 4;
+    TERM veryHigh   := trian  3 4 5;
+    TERM extreme    := trian  4 5 5;
+	METHOD : RM;
+	DEFAULT := 0;
+END_DEFUZZIFY
+
+RULEBLOCK No1
+	AND : PROD;			// Use 'min' for 'and' (also implicit use 'max' for 'or' to fulfill DeMorgan's Law)
+	ACT : MIN;			// Use 'min' activation method
+	ACCU : MAX;			// Use 'max' accumulation method
+
+    RULE 0: IF hr IS resting AND speed IS activeRecovery then intensity IS recovery;
+
+    RULE 1 :   IF hr IS veryLight  AND speed IS easy          then intensity IS low     ;
+    RULE 201 : IF hr IS light      AND speed IS easy          then intensity IS low;
+    RULE 202 : IF hr IS light      AND speed IS tempo         then intensity IS moderate;
+    RULE 301 : IF hr IS moderate   AND speed IS tempo         then intensity IS moderate    ;
+    RULE 302 : IF hr IS moderate   AND speed IS threshold     then intensity IS moderate    ;
+    RULE 303 : IF hr IS moderate   AND speed IS hard          then intensity IS high    ;
+    RULE 401 : IF hr IS subMaximal AND speed IS easy          then intensity IS moderate;
+    RULE 402 : IF hr IS subMaximal AND speed IS tempo         then intensity IS high;
+    RULE 403 : IF hr IS subMaximal AND speed IS threshold     then intensity IS high;
+    RULE 404 : IF hr IS subMaximal AND speed IS hard          then intensity IS veryHigh;
+    RULE 6 :   IF hr IS maximal      OR speed IS anaerobic    then intensity IS maximal ;
+
+
+    RULE 7 : IF speed IS activeRecovery AND slope IS increase THEN bodyStrain IS veryLow;
+    RULE 8 : IF speed IS easy           AND slope IS increase THEN bodyStrain IS veryLow;
+    RULE 9 : IF speed IS tempo          AND slope IS increase THEN bodyStrain IS low;
+    RULE 10: IF speed IS threshold      AND slope IS increase THEN bodyStrain IS moderate;
+    RULE 11: IF speed IS hard           AND slope IS increase THEN bodyStrain IS moderate;
+    RULE 12: IF speed IS anaerobic      AND slope IS increase THEN bodyStrain IS high ;
+
+    RULE 13: IF speed IS activeRecovery AND slope IS bigIncrease THEN bodyStrain IS veryLow;
+    RULE 14: IF speed IS easy           AND slope IS bigIncrease THEN bodyStrain IS low     ;
+    RULE 15: IF speed IS tempo          AND slope IS bigIncrease THEN bodyStrain IS moderate;
+    RULE 16: IF speed IS threshold      AND slope IS bigIncrease THEN bodyStrain IS high    ;
+    RULE 17: IF speed IS hard           AND slope IS bigIncrease THEN bodyStrain IS veryHigh;
+    RULE 18: IF speed IS anaerobic      AND slope IS bigIncrease THEN bodyStrain IS extreme;
+
+    RULE 19: IF speed IS activeRecovery AND slope IS veryBigIncrease THEN bodyStrain IS low;
+    RULE 20: IF speed IS easy           AND slope IS veryBigIncrease THEN bodyStrain IS moderate;
+    RULE 21: IF speed IS tempo          AND slope IS veryBigIncrease THEN bodyStrain IS high;
+    RULE 22: IF speed IS threshold      AND slope IS veryBigIncrease THEN bodyStrain IS veryHigh;
+    RULE 23: IF speed IS hard           AND slope IS veryBigIncrease THEN bodyStrain IS extreme;
+    RULE 24: IF speed IS anaerobic      AND slope IS veryBigIncrease THEN bodyStrain IS extreme ;
+
+    RULE 25: IF speed IS activeRecovery AND slope IS flat THEN bodyStrain IS veryLow;
+    RULE 26: IF speed IS easy           AND slope IS flat THEN bodyStrain IS low;
+    RULE 27: IF speed IS tempo          AND slope IS flat THEN bodyStrain IS low;
+    RULE 28: IF speed IS threshold      AND slope IS flat THEN bodyStrain IS moderate;
+    RULE 29: IF speed IS hard           AND slope IS flat THEN bodyStrain IS high;
+    RULE 30: IF speed IS anaerobic      AND slope IS flat THEN bodyStrain IS high;
+
+    RULE 31: IF speed IS activeRecovery AND slope IS drop THEN bodyStrain IS low;
+    RULE 32: IF speed IS easy           AND slope IS drop THEN bodyStrain IS moderate;
+    RULE 33: IF speed IS tempo          AND slope IS drop THEN bodyStrain IS high;
+    RULE 34: IF speed IS threshold      AND slope IS drop THEN bodyStrain IS high;
+    RULE 35: IF speed IS hard           AND slope IS drop THEN bodyStrain IS high;
+    RULE 36: IF speed IS anaerobic      AND slope IS drop THEN bodyStrain IS high ;
+
+    RULE 38: IF speed IS activeRecovery AND slope IS bigDrop THEN bodyStrain IS moderate;
+    RULE 39: IF speed IS easy           AND slope IS bigDrop THEN bodyStrain IS high     ;
+    RULE 40: IF speed IS tempo          AND slope IS bigDrop THEN bodyStrain IS high;
+    RULE 41: IF speed IS threshold      AND slope IS bigDrop THEN bodyStrain IS veryHigh    ;
+    RULE 42: IF speed IS hard           AND slope IS bigDrop THEN bodyStrain IS veryHigh;
+    RULE 43: IF speed IS anaerobic      AND slope IS bigDrop THEN bodyStrain IS extreme;
+
+   END_RULEBLOCK
+
+END_FUNCTION_BLOCK
+
+FUNCTION_BLOCK workoutSummary
+
+VAR_INPUT				// Define input variables
+	duration         : REAL;
+	distance         : REAL;
+	accentsAmount    : REAL;
+	recoveryAmount   : REAL;
+	ascent           : REAL;
+	highStrain       : REAL;
+END_VAR
+
+VAR_OUTPUT				// Define output variable
+    workoutProfit  : REAL;
+    neededRecovery : REAL;
+END_VAR
+
+FUZZIFY duration
+    TERM short           := sigm -0.6 25;
+    TERM moderate        := gbell 20 4 45;
+    TERM long            := gbell 30 4 100;
+    TERM veryLong        := sigm 0.07 140;
+END_FUZZIFY
+
+FUZZIFY distance
+	TERM short          := sigm -5 5 ;
+	TERM moderate       := gbell 4 5 9;
+	TERM long           := gbell 6 3 18;
+	TERM veryLong       := sigm 4 24;
+END_FUZZIFY
+
+FUZZIFY accentsAmount
+    TERM low             := trian  0 0 0.05;
+    TERM moderate        := trape  0.025 0.1 0.2 0.275;
+	TERM high            := trape  0.25 0.325 1 1;
+END_FUZZIFY
+
+FUZZIFY recoveryAmount
+    TERM low             := trian 0 0 0.08 ;
+    TERM moderate        := gbell 0.2 10 0.25;
+	TERM high            := sigm 17.5 0.5;
+END_FUZZIFY
+
+FUZZIFY ascent
+    TERM low             := trian 0 0 100 ;
+    TERM moderate        := gbell 150 5 275;
+    TERM high            := gbell 200 5 625;
+	TERM veryHigh        := sigm 0.05 800;
+END_FUZZIFY
+
+FUZZIFY highStrain
+    TERM low             := trian 0 0 0.03 ;
+    TERM moderate        := gbell 0.04 10 0.06;
+	TERM high            := sigm 100 0.1;
+END_FUZZIFY
+
+
+DEFUZZIFY workoutProfit
+	TERM recovery   := trian  0 0 0.75;
+	TERM endurance  := trian  0.25 1 1.75;
+	TERM speed      := trian  1.25 2 2;
+	METHOD : COG;
+	DEFAULT := 1;
+END_DEFUZZIFY
+
+DEFUZZIFY neededRecovery
+    TERM low        := trian  0 0  1;
+    TERM moderate   := trian  0 1  2;
+    TERM long       := trian  1 2  3;
+    TERM veryLong   := trian  2 3  3;
+	METHOD : RM;
+	DEFAULT := 2;
+END_DEFUZZIFY
+
+RULEBLOCK No2
+	AND : MIN;			// Use 'min' for 'and' (also implicit use 'max' for 'or' to fulfill DeMorgan's Law)
+	ACT : MIN;			// Use 'min' activation method
+	ACCU : MAX;			// Use 'max' accumulation method
+    RULE 1: if (duration is veryLong or distance is veryLong) then neededRecovery is veryLong;
+    RULE 2: IF duration is not short and recoveryAmount is not high then workoutProfit is endurance;
+    RULE 3: IF  duration IS NOT short AND highStrain IS NOT high THEN workoutProfit IS endurance;
+    RULE 4: IF (duration IS short OR duration IS moderate) AND (accentsAmount IS low) THEN workoutProfit IS recovery;
+    RULE 5: IF  duration IS NOT short AND accentsAmount IS NOT high THEN workoutProfit IS endurance;
+    RULE 6: IF (duration IS short OR duration is moderate) AND accentsAmount IS high Then workoutProfit IS speed;
+
+    RULE 7:  IF (duration is long or distance is long) and ascent is low                            then neededRecovery is moderate;
+    RULE 8:  IF (duration is long or distance is long) and ascent is moderate                       then neededRecovery is long;
+    RULE 9:  IF (duration is long or distance is long) and (ascent is high or ascent is veryHigh)   then neededRecovery is veryLong;
+
+    RULE 11: IF (duration is long or distance is long)         and highStrain is low       then neededRecovery is long;
+    RULE 12: IF (duration is long or distance is long)         and highStrain is moderate  then neededRecovery is veryLong;
+    RULE 13: IF (duration is long or distance is long)         and highStrain is high      then neededRecovery is veryLong;
+
+    RULE 14: IF (duration is moderate or distance is moderate) and highStrain is low       then neededRecovery is low;
+    RULE 15: IF (duration is moderate or distance is moderate) and highStrain is moderate  then neededRecovery is moderate;
+    RULE 16: IF (duration is moderate or distance is moderate) and highStrain is high      then neededRecovery is long;
+
+    RULE 17: IF (duration is short or distance is short) and highStrain is high            then neededRecovery is moderate;
+
+    RULE 18: IF (recoveryAmount is high)     and (distance is not long or distance is not veryLong) then neededRecovery is low;
+    RULE 19: IF (recoveryAmount is moderate) and (distance is not long or distance is not veryLong) then neededRecovery is moderate;
+    RULE 20: IF (recoveryAmount is low)      and (distance is not long or distance is not veryLong) then neededRecovery is moderate;
+
+    RULE 21: IF distance is short and duration is not short then workoutProfit is recovery;
+
+   END_RULEBLOCK
+
+END_FUNCTION_BLOCK
